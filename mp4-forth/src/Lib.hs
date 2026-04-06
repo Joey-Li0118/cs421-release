@@ -147,10 +147,13 @@ initComp = [("=",  Prim $ liftIStackOp $ liftCompOp (==)),
 --- ### Stack Manipulations
 
 initIStackOp :: Dictionary
-initIStackOp = [ ("dup",  Prim $ liftIStackOp istackDup)
-               ]
+initIStackOp = [ ("dup",  Prim $ liftIStackOp istackDup),
+    ("swap",  Prim $ liftIStackOp istackSwap),
+    ("drop",  Prim $ liftIStackOp istackDrop),
+    ("rot",  Prim $ liftIStackOp istackRot)
+    ]
 
-initPrintOp = [ (".",  Prim printPop)
+initPrintOp = [ (".",  Prim printPop), (".S",  Prim printStack)
               ]
 
 istackDup :: IStack -> Maybe IStack
@@ -230,16 +233,25 @@ cstackNext _ = Nothing
 
 --- ### Conditionals
 
+transIfElse :: Transition -> Transition -> (ForthState -> ForthState)
+transIfElse kif kelse (i:is, d, o) =
+    if i < 0 then -- true
+        kif (is, d, o)
+    else -- false
+        kelse (is, d, o)
+transIfElse _ _ _ = underflow
+
+
 cstackIf :: CStack -> Maybe CStack
 cstackIf cstack = Just $ ("if", id):cstack
 
 cstackElse :: CStack -> Maybe CStack
-cstackElse cstack@(("if", _):_) = undefined
-cstackElse _ = Nothing
+cstackElse (("if", ifTrue): cstackrest) = Just (("else", id):("if", ifTrue):cstackrest) --I read in a if statement when i try to do else operation
+cstackElse _ = Nothing -- if read anything but "if" then else should not do anything
 
 cstackThen :: CStack -> Maybe CStack
-cstackThen (("else", kelse):("if", kif):(c, kold):cstack) = undefined
-cstackThen (("if", kif):(c, kold):cstack) = undefined
+cstackThen (("else", kelse):("if", kif):(c, kold):cstack) = Just ((c, knew):cstack) where knew = (transIfElse kif kelse) . kold
+cstackThen (("if", kif):(c, kold):cstack) = Just ((c, knew):cstack) where knew = (transIfElse kif id) . kold
 cstackThen _ = Nothing
 
 --- ### Indefinite Loops
