@@ -98,7 +98,10 @@ liftIntOp _  _        = Nothing
 --- ### `liftCompOp`
 
 liftCompOp :: (Integer -> Integer -> Bool) -> IStack -> Maybe IStack
-liftCompOp = undefined
+liftCompOp op (x:y:xs) 
+    |(y `op` x) == False = Just (0 : xs)
+    | otherwise = Just (-1 : xs)
+liftCompOp _  _        = Nothing
 
 
 --- The Dictionary
@@ -120,15 +123,26 @@ initCompileOp = [ (":",    Define)
                 ]
 
 --- ### Arithmetic Operators
+liftdivOp :: (Integer -> Integer -> Integer) -> IStack -> Maybe IStack
+liftdivOp (div) (x:y:xs) 
+    | x == 0 = error "can't divide by 0"
+    | otherwise = Just $ (y `div` x) : xs
 
 initArith :: Dictionary
-initArith = [ ("+",  Prim $ liftIStackOp $ liftIntOp (+))
+initArith = [ ("+",  Prim $ liftIStackOp $ liftIntOp (+)), ("*",  Prim $ liftIStackOp $ liftIntOp (*)), ("-",  Prim $ liftIStackOp $ liftIntOp (-)),  
+                ("/",  Prim $ liftIStackOp $ liftdivOp (div))
             ]
 
 --- ### Comparison Operators
 
 initComp :: Dictionary
-initComp = []
+initComp = [("=",  Prim $ liftIStackOp $ liftCompOp (==)), 
+    ("<=",  Prim $ liftIStackOp $ liftCompOp (<=)), 
+    (">=",  Prim $ liftIStackOp $ liftCompOp (>=)), 
+    ("<",  Prim $ liftIStackOp $ liftCompOp (<)), 
+    (">",  Prim $ liftIStackOp $ liftCompOp (>)), 
+    ("!=",  Prim $ liftIStackOp $ liftCompOp (/=))
+    ]
 
 --- ### Stack Manipulations
 
@@ -144,13 +158,16 @@ istackDup (i:is) = Just $ i:i:is
 istackDup _      = Nothing
 
 istackSwap :: IStack -> Maybe IStack
-istackSwap = undefined
+istackSwap (i:i2:is) = Just $ i2:i:is
+istackSwap _      = Nothing
 
 istackDrop :: IStack -> Maybe IStack
-istackDrop = undefined
+istackDrop (i:is) = Just $ is
+istackDrop _      = Nothing
 
 istackRot :: IStack -> Maybe IStack
-istackRot = undefined
+istackRot (i:i2:i3:is) = Just $ (i3:i:i2:is)
+istackRot _      = Nothing
 
 --- ### Popping the Stack
 
@@ -162,7 +179,8 @@ printPop _ = underflow
 --- ### Printing the Stack
 
 printStack :: ForthState -> ForthState
-printStack (istack, dict, out) = undefined
+printStack ((istack), dict, out) = (istack, dict, unwords (reverse (map show istack)) : out) -- bruh what am i even looking at
+-- printStack _ = underflow
 
 --- Evaluator
 --- ---------
@@ -213,7 +231,7 @@ cstackNext _ = Nothing
 --- ### Conditionals
 
 cstackIf :: CStack -> Maybe CStack
-cstackIf cstack = undefined
+cstackIf cstack = Just $ ("if", id):cstack
 
 cstackElse :: CStack -> Maybe CStack
 cstackElse cstack@(("if", _):_) = undefined
