@@ -256,11 +256,24 @@ cstackThen _ = Nothing
 
 --- ### Indefinite Loops
 
+transUntil :: Transition -> (ForthState -> ForthState)
+transUntil kloop (i:is, d, o) =
+    let (x:xs, d', o') = kloop (i:is,d,o) in
+        if x /= 0 then
+            (xs,d',o')
+        else
+            transUntil kloop (xs,d',o')
+
+        
+transUntil _ _ = underflow
+
+
+
 cstackBegin :: CStack -> Maybe CStack
 cstackBegin cstack = Just $ ("begin", id):cstack
 
 cstackUntil :: CStack -> Maybe CStack
-cstackUntil (("begin", kloop):(c, kold):cstack) = undefined
+cstackUntil (("begin", kloop):(c, kold):cstack) = Just ((c, knew):cstack) where knew = (transUntil kloop) . kold
 cstackUntil _ = Nothing
 
 
