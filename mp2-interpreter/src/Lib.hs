@@ -139,20 +139,39 @@ eval (CompOpExp op e1 e2) env =
 
 --- ### If Expressions
 
-eval (IfExp e1 e2 e3) env = undefined
+eval (IfExp e1 e2 e3) env = 
+    case eval e1 env of
+        BoolVal True -> eval e2 env
+        BoolVal False -> eval e3 env
+        _ -> ExnVal "Condition is not a Bool"
 
 --- ### Functions and Function Application
 
-eval (FunExp params body) env = undefined
+eval (FunExp params body) env = CloVal params body env
 
-eval (AppExp e1 args) env = undefined
+eval (AppExp e1 args) env =
+    case eval e1 env of
+        CloVal params body newenv -> eval body (H.union (H.fromList (zip params (map (\arg -> eval arg env) args))) newenv) -- for each argument in the function zip it with the parameter variables e.g ("x", IntExp 5)
+        _ -> ExnVal "Apply to non-closure"
 
 --- ### Let Expressions
 
-eval (LetExp pairs body) env = undefined
+-- LetExp [(String,Exp)] Exp
+eval (LetExp pairs body) env =
+    let newenv = H.union (H.fromList (map (\(name, expr) -> (name, eval expr env)) pairs)) env
+    in eval body newenv  
+    -- have to look up a variable in the expression then evaluate it
+--body can be an (IntOpExp "/" e1 e2)
+-- have to evaluate body using the env in pairs, so evaluate pairs first, then eval body newenv
+
+
 
 --- Statements
 --- ----------
+firstOfThree :: (a, b, c) -> a
+firstOfThree (x, _, _) = x
+secOfThree (_, x, _) = x
+thirOfThree (_, _, x) = x
 
 -- Statement Execution
 -- -------------------
@@ -162,19 +181,39 @@ exec (PrintStmt e) penv env = (val, penv, env)
     where val = show $ eval e env
 
 --- ### Set Statements
-
-exec (SetStmt var e) penv env = undefined
+--
+exec (SetStmt var e) penv env = ("", penv, H.union (H.fromList [(var, eval e env)] ) env)
 
 --- ### Sequencing
 
-exec (SeqStmt []) penv env = undefined
+exec (SeqStmt []) penv env = ("", penv, env)
+exec (SeqStmt (x:xs)) penv env = (firstOfThree(exec x penv env) ++ firstOfThree(exec (SeqStmt xs) penv' env'), penv'', env'')
+    where 
+    penv' = secOfThree (exec x penv env)
+    env' = thirOfThree (exec x penv env)
+    penv'' = secOfThree (exec (SeqStmt xs) penv' env')
+    env'' = thirOfThree (exec (SeqStmt xs) penv' env')
+
+
 
 --- ### If Statements
 
-exec (IfStmt e1 s1 s2) penv env = undefined
+exec (IfStmt e1 s1 s2) penv env = 
+    case eval e1 env of
+        BoolVal True -> exec s1 penv env
+        BoolVal False -> exec s2 penv env
+        _ -> ("exn: Condition is not a Bool", penv, env)
 
 --- ### Procedure and Call Statements
 
-exec p@(ProcedureStmt name args body) penv env = undefined
+exec p@(ProcedureStmt name args body) penv env = ("", H.insert name p penv, env)
 
-exec (CallStmt name args) penv env = undefined
+exec (CallStmt name args) penv env = 
+    case (H.lookup name penv) of 
+        Just (ProcedureStmt name procedureargs body) -> 
+            -- for every argument we want to pair it up with the value that it holds
+            -- Add to env and have it be a newenv which we can then use to execute the procedure
+            -- takes all initialized vars in the procedure
+            let newenv = H.union (H.fromList (zip procedureargs (map (\arg -> eval arg env) args))) env
+            in exec body penv newenv  
+        _ -> ("Procedure " ++ name ++ " undefined", penv, env)

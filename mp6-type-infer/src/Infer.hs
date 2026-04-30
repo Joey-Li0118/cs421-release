@@ -114,6 +114,8 @@ infer env (LetExp x e1 e2) = do
 
   return t2
 
+
+
 -- Unary
 infer env (MonOpExp m e') = do
   t1 <- (infer env e')
@@ -139,17 +141,61 @@ infer env (BinOpExp b e1 e2) = do
   return freshvariable
 
 -- if then else
-infer env (IfExp e1 e2 e3) = undefined
+infer env (IfExp e1 e2 e3) = do
+  t1 <- infer env e1
+  t2 <- infer env e2
+  t3 <- infer env e3
+  constrain t1 boolTy
+  constrain t2 t3
+  return t2
 
 -- function
-infer env (FunExp x e') = undefined
+infer env (FunExp x e') = do
+  freshvariable <- freshTau
+  let env' = H.insert x (Forall [] freshvariable) env
+
+  t2<- infer env' e' 
+  return (funTy freshvariable t2)
   
 
 -- application
-infer env (AppExp e1 e2) = undefined
+infer env (AppExp e1 e2) = do
+  t1 <- infer env e1
+  t2 <- infer env e2
+  freshvariable <- freshTau
+
+  constrain t1 (funTy t2 freshvariable)
+  return freshvariable
+
+
 
 -- LetRecInExp
-infer env (LetRecExp f x e1 e2) = undefined
+infer env (LetRecExp f x e1 e2) = do
+  -- TODO
+  t1 <- freshTau
+  t2 <- freshTau
+
+  let env' = H.insert x (Forall [] t1) env
+  let env'' = H.insert f (Forall [] (funTy t1 t2) ) env'
+
+  (t3, phi1) <- listen (infer env'' e1)
+
+  sub <- unify ((t2 :~: t3) : phi1)
+
+  let t1' = apply sub t1
+  let t2' = apply sub t2
+  let env''' = apply sub env
+
+
+  let s = gen env''' (funTy t1' t2')
+
+  let envlast = H.insert f s env'''
+
+  t <- infer envlast e2
+  return t
+
+
+  
 
 
 inferInit :: TypeEnv -> Exp -> Infer PolyTy
